@@ -1,0 +1,210 @@
+---
+title: "Statistical Inference - Project"
+author: "Gareth Coffey"
+date: "26/05/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Overview
+
+This is a paper that consists of two parts:
+1.    A simulation exercise investigating the exponential distribution in R and 
+      comparing it with the Central Limit Theorem (CLT).
+2.    Inferential data analysis of the ToothGrowth data in the R datasets pacakge.
+
+## Part 1 - Simulations investigating the exponential distribution in R
+
+```{r setupData, echo=FALSE}
+library("data.table")
+library("ggplot2")
+set.seed(1020304) # setting the seed makes the paper reproducible
+lambda <- 0.2     # lambda must be set to 0.2 for all simulations, per the instructions
+n <- 40           # You will investigate the distribution of averages of 40 exponentials
+nosim <- 1000     # Note you will need to do a thousand simulations
+```
+
+Here I perform the simulations of the exponentials and then calculate the
+means of those exponentials:
+
+First, I replicate 1000 times the simulation of the exponential distribution using the expression rexp(n, lambda)
+
+```{r simulate}
+simulation_of_exponentials <- replicate(nosim, rexp(n, lambda))
+means_of_exponentials <- apply(simulation_of_exponentials, 2, mean)
+```
+
+Some basic exploration of the simulation:
+
+```{r dim}
+# Number of rows and columns of data:
+dim(simulation_of_exponentials)
+
+# Value range of the data:
+range(simulation_of_exponentials)
+
+# First 10 values in the data:
+simulation_of_exponentials[0:10]
+```
+
+### Sample Mean versus Theoretical Mean
+#### Question 1 - Show the sample mean and compare it to the theoretical mean of the distribution.
+
+```{r question1}
+sample_mean <- mean(means_of_exponentials)
+theoretical_mean <- 1/lambda
+```
+
+The sample mean is:
+```{r sampleMean, echo=FALSE}
+sample_mean
+```
+
+The theoretical mean is:
+```{r theoreticalMean, echo=FALSE}
+theoretical_mean
+```
+
+The sample mean is very close to the theoretical mean.
+
+### Sample Variance versus Theoretical Variance
+#### Question 2 - Show how variable the sample is (via variance) and compare it to the theoretical variance of the distribution
+
+```{r sd_of_distribution}
+sd_of_distribution <- sd(means_of_exponentials)
+variance_distribution <- sd_of_distribution^2
+
+sd_theoretical <- (1/lambda)/sqrt(n)
+variance_theoretical <- ((1/lambda)*(1/sqrt(n)))^2
+```
+
+The standard deviation of the sample distribution is:
+```{r, echo=FALSE}
+variance_distribution
+```
+
+The standard deviation of the central limit theorem is:
+```{r, echo=FALSE}
+variance_theoretical
+```
+
+### Distribution
+#### Question 3 - Show the distribution is approximately normal
+
+```{r}
+x_axis <- seq(min(means_of_exponentials), max(means_of_exponentials), length=100)
+y_axis <- dnorm(x_axis, mean=1/lambda, sd=(1/lambda/sqrt(n)))
+hist(means_of_exponentials, breaks=n, prob=T, col="blue", xlab="Means of exponentials", main="Histogram of means of exponentials", ylab="Density")
+lines(x_axis, y_axis, pch=22, col="black", lty=6)
+```
+
+The distribution of the values is approximately normal as it has the familiar bell-curve.
+
+# Part 2 - Inferential Data Analysis of ToothGrowth data
+
+```{r toothGrowthSetup}
+# Loading the dataset 'ToothGrowth'
+data("ToothGrowth")
+```
+
+A basic summary of the data:
+
+```{r explore}
+# A summary of the dataset
+summary(ToothGrowth)
+
+# The first few rows of data
+head(ToothGrowth)
+
+# The dimensions of the data
+dim(ToothGrowth)
+
+# The structure of the data
+str(ToothGrowth)
+```
+
+The data set has 60 observations, each with 3 variables:
+1. len (number)
+2. supp (a factor - supplement type VC or OJ)
+3. dose (number)
+
+## Comparing the tooth growth in by supp and dose:
+
+```{r plot}
+qplot(supp, len, data=ToothGrowth, facets=~dose,xlab="Supplement", ylab="Length") + geom_boxplot(aes(fill=supp))
+```
+
+It appears that as the dose increases, the tooth growth increases - this holds true for both supplements.  
+
+It seems from the plot above that supplement OJ induces higher relative growth between 0.5 and 1 mg -- increasing the dosage to 2mg has little effect.  
+
+The growth increases fairly linearly for supplement VC.
+
+Overall, it appears that supplement OJ causes more tooth growth except at the 2mg dosage level, where supplement VC causes higher growth.
+
+## Hypothesis Testing - Assumptions
+
+There are a few assumptions that need to be made about the data before I conduct hypothesis testing:
+
+1. The variables are IID
+2. A normal distribution for tooth growth
+
+## Hypothesis Test - Supplement Type
+
+#### Null Hypothesis (H0)
+Neither supplement causes any tooth growth.
+
+#### Alternative Hypothesis (Ha)
+Supplement OJ induces more tooth growth than supplement VC.
+
+#### Testing
+First, we need to split the dataset by the type of supplement:
+
+```{r splitTheDataSet}
+oj_data = ToothGrowth$len[ToothGrowth$supp == 'OJ']
+vc_data = ToothGrowth$len[ToothGrowth$supp == 'VC']
+```
+
+Conduct a t confidence interval test on the two sets of data:
+  
+```{r confidencetest}
+t.test(oj_data, vc_data, alternative="greater", paired=FALSE, conf.level=0.95)
+```
+
+A P-value of 0.03032 is lower than 0.05 (the 5% tolerance for error - i.e. our confidence level is 95% or 0.95).  Therefore, the null hypothesis is rejected - the supplements cause tooth growth - we can say this with 97% confidence.
+
+## Hypothesis Test - Dosage
+
+#### Null Hypothesis (H0)
+Dosage does not affect the level of tooth growth.
+
+#### Alternative Hypothesis (Ha)
+As dosage increases so does the level of tooth growth.
+
+#### Testing
+First, we need to split the dataset by the level of dosage:
+
+```{r splitByDosage}
+doseHalfMg = ToothGrowth$len[ToothGrowth$dose == 0.5]
+doseOneMg = ToothGrowth$len[ToothGrowth$dose == 1]
+doseTwoMg = ToothGrowth$len[ToothGrowth$dose == 2]
+```
+
+Conduct a t confidence interval test on the 0.5mg vs 1mg
+
+```{r test_half_and_one}
+t.test(doseHalfMg, doseOneMg, alternative="less", paired=FALSE, conf.level = 0.95)
+```
+
+Here, the P_value of 6.342e-08 is less than 0.05.  Therefore, there is a negligle chance of getting a value that disagrees with our alternative hypothesis for doses of 0.5 and 1mg.
+
+Now, let's test 1mg and 2mg:
+
+```{r test_one_and_two}
+t.test(doseOneMg, doseTwoMg, alternative="less", paired=FALSE, conf.level=0.95)
+```
+
+Here the P-value is slightly higher at 9.532e-06, but is still far less than 0.05 so we can safely reject the null hypothesis.  The slightly higher P-value may well represent the lower amount of growth we saw in the bar plot above, for the OJ supplement.
